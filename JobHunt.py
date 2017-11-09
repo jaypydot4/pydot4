@@ -6,13 +6,17 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions
+from selenium.common.exceptions import ElementNotVisibleException
+from urlparse import urlparse
 import webbrowser
+import argparse
 import requests
 import getpass
 from selenium.common.exceptions import ElementNotVisibleException
 import sys
 import time
 import re
+import Credentials
 from pprint import pprint
 
 import re
@@ -46,17 +50,20 @@ class JobHunt(object):
         return
 
     def fill_login_info(self):
+        print('Fill-up log-in credentials')
         self.driver.find_element_by_id('user_login').send_keys(self.username)
         self.driver.find_element_by_id('user_pass').send_keys(self.passwd)
         self.driver.find_element_by_id('wp-submit').click()
         return
 
     def search_from_keyword_and_start(self):
+        print('Searching job postings related to \"{}\"'.format(self.keyword))
         self.driver.find_element_by_name('search_keywords').send_keys(self.keyword)
         self.driver.find_element_by_class_name('search_submit').click()
 
-        # WebDriverWait(self.driver, 10).until(
-        #     expected_conditions.text_to_be_present_in_element((By.CLASS_NAME, 'job_listings'), self.joblist_pattern()))
+        # WebDriverWait(self.driver, 30).until(
+        #      expected_conditions.text_to_be_present_in_element_value((By.CLASS_NAME, self.joblist_pattern)))
+        # print("Job list loaded")
         return
 
     def extract_soup_from_url(self, url):
@@ -76,19 +83,20 @@ class JobHunt(object):
 
         return soup
 
-    def go_to_a_page_and_collect_p_details_url(self, url_soup):
-        self.product_url_list = []
-        products_details_url_list = url_soup.find_all("li", {"id": 'job_listing-'} )
-        print(products_details_url_list)
-        for entry in products_details_url_list:
-            product_url = entry.get("data-href")
-            #print(product_url)
-            self.product_url_list.append(self.base_url + product_url)
+    def collect_job_urls(self):
+        print('Collecting job postings...')
+        self.job_url_list = []
 
-        return self.product_url_list
+        elems = self.driver.find_elements_by_xpath("//li[@data-href]")
+        for elem in elems:
+            if (urlparse(elem.get_attribute("data-href")).netloc == 'sgcareers.com.sg'):
+                #print elem.get_attribute("data-href")
+                self.job_url_list.append(elem.get_attribute("data-href"))
+        return self.job_url_list
 
     def scan_jobsite(self):
         try:
+            print("Launching default web browser...")
             self.open_base_url()
 
             # if menu is not displayed (because window size is too small to display them, then process it here)
@@ -111,10 +119,15 @@ class JobHunt(object):
 
 
             time.sleep(10)
-            job_list_soup = self.extract_soup_from_url(self.driver.current_url)
-            print(job_list_soup)
-            self.go_to_a_page_and_collect_p_details_url(job_list_soup)
+            self.extract_soup_from_url(self.driver.current_url)
+            #print(job_list_soup)
+            self.collect_job_urls()
             #pprint(job_list_soup.text)
+
+            for job_details in self.job_url_list:
+                job_soup = self.extract_soup_from_url(job_details)
+                title = job_soup.find("h1", {"class":"page-title"}).text.strip()
+                print(title)
 
         except ElementNotVisibleException as e:
             print(e)
@@ -127,6 +140,24 @@ class JobHunt(object):
 if __name__ == "__main__":
 
     print("Please input basic details to log-in to http://sgcareers.com.sg")
+    # parser = argparse.ArgumentParser()
+    # parser.add_argument('-k', '--keyword', required=True, help='Specific job title to search', type=str)
+    # parser.add_argument('-a', '--autoapply', choices=['true', 'yes', 'false', 'no'], default='no',
+    #                         help='set TRUE / YES or FALSE / NO, if to auto-apply when job is found', type=str)
+    # parser.add_argument('-cv', '--resume', help='...', type=str)
+    #
+    # args = parser.parse_args()
+    #
+    # if args.autoapply.lower() == 'yes' or args.autoapply.lower() == 'true':
+    #     #if 'resume' not in vars(args):
+    #     if args.resume is None:
+    #         print('Auto apply requires a link to your resume or CV')
+    #         sys.exit(1)
+    #     else:
+    #         print('Auto apply is enabled')
+    # else:
+    #     print('Auto apply is disabled')
+
     # firstname = raw_input("First name: ")
     # lastname = raw_input("Last name: ")
     # useremail = raw_input("Email: ")
@@ -135,12 +166,12 @@ if __name__ == "__main__":
     #     sys.exit(1)
     #
     # password = getpass.win_getpass("User password: ")
-    firstname = "Jay Warren"
-    lastname = "Marante"
-    username = "jaywarren"
-    useremail = "jaythesis@yahoo.com"
-    password = "Hgstinc1*"
-    keyword = "Firmware"
+
+    firstname, lastname, username, useremail, password, keyword = Credentials.Credentials().get_credentials()
+
+    if not re.match(r"[^@]+@[^@]+\.[^@]+", useremail):
+        print("Invalid email address")
+        sys.exit(1)
 
     ListJobs = JobHunt(firstname, lastname, username, useremail, password, keyword)
     ListJobs.scan_jobsite()
