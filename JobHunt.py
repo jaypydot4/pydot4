@@ -22,10 +22,9 @@ from pprint import pprint
 
 import re
 
-class new_job_details(object):
-    job = {}
-
+class NewJobDetails(object):
     def __init__(self, job_posted, job_title, job_description, job_company, job_location):
+        self.job = {}
         self.job["posted"] = job_posted
         self.job["title"] = job_title
         self.job["description"] = job_description
@@ -33,8 +32,9 @@ class new_job_details(object):
         self.job["location"] = job_location
         return
 
-    def __call__(self):
-        return self.job
+    def __getitem__(self, item):
+        #print '%-15s  %s' % (type(item), item)
+        return self.job[item]
 
 
 class JobHunt(object):
@@ -49,7 +49,7 @@ class JobHunt(object):
         self.base_url = 'http://sgcareers.com.sg/login'
         self.driver = webdriver.Chrome()
         self.csv_filename = 'job_listing_sgcareers.csv'
-        self.new_job = {}
+        self.new_job = None
 
         pattern = '(job_listing-[\d]+)'
         self.joblist_pattern = re.compile(pattern)
@@ -125,12 +125,12 @@ class JobHunt(object):
         # print("Company: {}".format(organization))
         # print("Location: {}".format(location))
         # print("Description: {}".format(description))
-        self.new_job = new_job_details(posted, title, description, organization, location)
+        self.new_job = NewJobDetails(posted, title, description, organization, location)
         return
 
     def create_or_open_csv(self):
         try:
-            self.fileHandle = open(self.csv_filename, "r")
+            self.fileHandle = open(self.csv_filename, "r+")
         except IOError as e:
             self.fileHandle = open(self.csv_filename, "w")
         return True
@@ -174,25 +174,26 @@ class JobHunt(object):
             self.collect_job_urls()
 
             if self.create_or_open_csv() is True:
-                for job_details in self.job_url_list:
-                    self.extract_soup_from_url(job_details)
+                self.set_table_headers()
+                csvwriter = csv.DictWriter(self.fileHandle, fieldnames=self.table_headers)
+                csvwriter.writeheader()
 
-                    job_content = self.new_job
-                    print(type(job_content))
-                    print(job_content)
-                    # csv.writer({
-                    #     self.table_headers[0]: self.new_job["posted"],
-                    #     self.table_headers[1]: self.new_job["title"],
-                    #     self.table_headers[2]: self.new_job["description"],
-                    #     self.table_headers[3]: self.new_job["company"],
-                    #     self.table_headers[4]: self.new_job["location"]
-                    # })
+                for job_details in self.job_url_list:
+                    self.extract_job_details(job_details)
+
+                    csvwriter.writerow({
+                        self.table_headers[0]: self.new_job["posted"],
+                        self.table_headers[1]: self.new_job["title"],
+                        self.table_headers[2]: self.new_job["description"],
+                        self.table_headers[3]: self.new_job["company"],
+                        self.table_headers[4]: self.new_job["location"]
+                    })
 
                     self.fileHandle.flush()
 
                 self.fileHandle.close()
-                self.create_or_open_csv()
-                self.fileHandle.close()
+#                self.create_or_open_csv()
+#                self.fileHandle.close()
 
         except ElementNotVisibleException as e:
             print(e)
