@@ -10,4 +10,5 @@ class Credentials(object):
         useremail = "jaythesis@yahoo.com"
         password = "Hgstinc1*"
         keyword = "Firmware"
-        return firstname, lastname, username, useremail, password, keyword
+        autoapply = True
+        return firstname, lastname, username, useremail, password, keyword, autoapply
