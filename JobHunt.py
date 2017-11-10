@@ -16,10 +16,26 @@ from selenium.common.exceptions import ElementNotVisibleException
 import sys
 import time
 import re
+import csv
 import Credentials
 from pprint import pprint
 
 import re
+
+class new_job_details(object):
+    job = {}
+
+    def __init__(self, job_posted, job_title, job_description, job_company, job_location):
+        self.job["posted"] = job_posted
+        self.job["title"] = job_title
+        self.job["description"] = job_description
+        self.job["company"] = job_company
+        self.job["location"] = job_location
+        return
+
+    def __call__(self):
+        return self.job
+
 
 class JobHunt(object):
 
@@ -32,6 +48,8 @@ class JobHunt(object):
         self.keyword = keyword
         self.base_url = 'http://sgcareers.com.sg/login'
         self.driver = webdriver.Chrome()
+        self.csv_filename = 'job_listing_sgcareers.csv'
+        self.new_job = {}
 
         pattern = '(job_listing-[\d]+)'
         self.joblist_pattern = re.compile(pattern)
@@ -67,8 +85,6 @@ class JobHunt(object):
         return
 
     def extract_soup_from_url(self, url):
-        soup = None
-
         try:
             resp = requests.get(url)
             resp.raise_for_status()
@@ -90,13 +106,48 @@ class JobHunt(object):
         elems = self.driver.find_elements_by_xpath("//li[@data-href]")
         for elem in elems:
             if (urlparse(elem.get_attribute("data-href")).netloc == 'sgcareers.com.sg'):
-                #print elem.get_attribute("data-href")
                 self.job_url_list.append(elem.get_attribute("data-href"))
         return self.job_url_list
 
+    def extract_job_details(self, job_details):
+        job_soup = self.extract_soup_from_url(job_details)
+        title = job_soup.find("h1", {"class": "page-title"}).text.strip()
+        posted = job_soup.find("li", {"class": "job-date-posted"}).text.strip()
+        organization = job_soup.find("li", {"class": "job-company"}).text.strip()
+        location = job_soup.find("a", {"rel": "tag"}).text.strip()
+        details = job_soup.find("div", {"itemprop": "description"}).findAll("p")
+        description = ""
+        for entry in details:
+            description += entry.text.strip().encode('utf-8') + "\n"
+
+        # print("Job title: {}".format(title))
+        # print("Date posted: {}".format(posted))
+        # print("Company: {}".format(organization))
+        # print("Location: {}".format(location))
+        # print("Description: {}".format(description))
+        self.new_job = new_job_details(posted, title, description, organization, location)
+        return
+
+    def create_or_open_csv(self):
+        try:
+            self.fileHandle = open(self.csv_filename, "r")
+        except IOError as e:
+            self.fileHandle = open(self.csv_filename, "w")
+        return True
+
+    def read_csv_file(self):
+        with open(self.csv_filename, 'rb') as csvfile:
+            spamreader = csv.reader(csvfile, delimiter=' ', quotechar='|')
+        for row in spamreader:
+            print ', '.join(row)
+
+    def set_table_headers(self):
+        self.table_headers = ["Date posted", "Job Title", "Description", "Company", "Location"]
+        return self.table_headers
+
     def scan_jobsite(self):
         try:
-            print("Launching default web browser...")
+            print("Launching Google Chrome web browser...")
             self.open_base_url()
 
             # if menu is not displayed (because window size is too small to display them, then process it here)
@@ -117,23 +168,34 @@ class JobHunt(object):
 
             self.search_from_keyword_and_start()
 
-
+            # TODO: Change this "wait" implementation
             time.sleep(10)
             self.extract_soup_from_url(self.driver.current_url)
-            #print(job_list_soup)
             self.collect_job_urls()
-            #pprint(job_list_soup.text)
 
-            for job_details in self.job_url_list:
-                job_soup = self.extract_soup_from_url(job_details)
-                title = job_soup.find("h1", {"class":"page-title"}).text.strip()
-                print(title)
+            if self.create_or_open_csv() is True:
+                for job_details in self.job_url_list:
+                    self.extract_soup_from_url(job_details)
+
+                    job_content = self.new_job
+                    print(type(job_content))
+                    print(job_content)
+                    # csv.writer({
+                    #     self.table_headers[0]: self.new_job["posted"],
+                    #     self.table_headers[1]: self.new_job["title"],
+                    #     self.table_headers[2]: self.new_job["description"],
+                    #     self.table_headers[3]: self.new_job["company"],
+                    #     self.table_headers[4]: self.new_job["location"]
+                    # })
+
+                    self.fileHandle.flush()
+
+                self.fileHandle.close()
+                self.create_or_open_csv()
+                self.fileHandle.close()
 
         except ElementNotVisibleException as e:
             print(e)
-        except:
-            print("Invalid URL: {}".format(self.driver.current_url))
-            sys.exit(1)
         return
 
 
