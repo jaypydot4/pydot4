@@ -7,6 +7,7 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions
 from selenium.common.exceptions import ElementNotVisibleException
+from selenium.webdriver.chrome.options import Options
 from urlparse import urlparse
 from datetime import timedelta, date
 import webbrowser
@@ -46,7 +47,11 @@ class JobHunt(object):
         self.keyword = keyword
         self.autoapply = autoapply
         self.base_url = 'http://sgcareers.com.sg/login'
-        self.driver = webdriver.Chrome()
+
+        chromeOptions = Options()
+        chromeOptions.add_argument('--start-maximized')
+        self.driver = webdriver.Chrome(chrome_options=chromeOptions)
+
         self.csv_filename = 'job_listing_sgcareers.csv'
         self.new_job = None
         self.table_headers = ["Date posted", "Job Title", "Description", "Company", "Location", "Applied"]
@@ -64,7 +69,7 @@ class JobHunt(object):
         return
 
     def open_base_url(self):
-        self.driver.maximize_window()
+        #self.driver.maximize_window()
         self.driver.get(self.base_url)
         return
 
@@ -85,7 +90,7 @@ class JobHunt(object):
         self.driver.find_element_by_class_name('search_submit').click()
 
         # WebDriverWait(self.driver, 30).until(
-        #      expected_conditions.text_to_be_present_in_element_value((By.CLASS_NAME, self.joblist_pattern)))
+        #     expected_conditions.presence_of_element_located((By.CLASS_NAME, 'job_listings')))
         # print("Job list loaded")
         return
 
